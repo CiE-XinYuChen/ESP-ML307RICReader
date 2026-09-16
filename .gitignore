@@ -1,0 +1,9 @@
+build/
+sdkconfig
+sdkconfig.old
+gui/.venv/
+gui/build/
+gui/dist/
+gui/*.spec
+__pycache__/
+*.pyc

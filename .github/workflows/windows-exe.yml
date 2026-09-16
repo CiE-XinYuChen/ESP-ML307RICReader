@@ -1,0 +1,59 @@
+name: Build Windows EXE
+
+on:
+  push:
+    paths:
+      - 'gui/**'
+      - '.github/workflows/windows-exe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: 'gui/requirements*.txt'
+      - name: Install dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build standalone EXE
+        run: python build_gui.py
+      - name: Check EXE starts
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath 'dist/XMiniICCIDReader.exe' -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $app.Refresh()
+            if ($app.HasExited) { throw "EXE exited unexpectedly: $($app.ExitCode)" }
+            $window = Get-Process -Name XMiniICCIDReader -ErrorAction SilentlyContinue |
+              Where-Object { $_.MainWindowTitle -eq 'XMini 设备标识读取器' }
+            if (-not $window) {
+              throw 'Expected application window not found'
+            }
+          } finally {
+            Get-Process -Name XMiniICCIDReader -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+          Get-FileHash dist/XMiniICCIDReader.exe -Algorithm SHA256 |
+            Format-List | Out-File dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XMiniICCIDReader-Windows-x64
+          path: |
+            gui/dist/XMiniICCIDReader.exe
+            gui/dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
